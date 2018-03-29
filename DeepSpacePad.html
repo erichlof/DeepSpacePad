@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1">
+        <title>Web Audio - Deep Space Pad</title>
+
+        <style>
+                html, body {
+                        overflow: hidden;
+                        width: 100%;
+                        height: 100%;
+                        margin: 0px;
+                }
+
+                #spaceBackground {
+                        background: url(images/CarinaNebula.jpg);
+                        background-size:cover;
+                        background-repeat:round;
+                        overflow: hidden;
+                        width: 100%;
+                        height:100%;
+                        margin: 0px;
+                        position: absolute;
+                        z-index: -1;
+                        
+                        animation: zoomAnimation 180s ease infinite alternate;
+                }
+
+                @keyframes zoomAnimation {
+                        0% { 
+                                transform: scale(4.0, 4.0) rotate(20deg);
+                        }
+                        100% {
+                                transform:  scale(1.0, 1.0);
+                        }
+                }
+
+                #textInfo {
+                        font-family: 'Courier';
+                        font-style: italic;
+                        font-size: 18px;
+                        color:limegreen;
+                        position: absolute;
+                        left: 1%;
+                        top: 1%;
+                        z-index: 1;
+                }
+
+                
+        </style>
+</head>
+
+<body>
+
+        <div id="spaceBackground"> </div>
+
+        <div id="textInfo"> </div>
+
+        <script>
+
+                var audioContext;
+                var gainNodes = [];
+                var bandPassFilters = [];
+                var sources = [];
+                var myArrayBuffer;
+                var MIDInoteOctaveOffsets = [48, 60, 72, 84, 96]; // start at 48, 36 is too low for air noise to be heard
+                /*
+                //  in MIDI, 60 is C4, middle C on the piano (261.626 Hz)
+                // likewise, 69 is A4, the A above middle C, also it's the international tuning note A440 (440.0 Hz)
+                var MIDInoteNumbers = [ 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                                        48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+                                        60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
+                                        72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+                                        84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
+                                        96, 97, 98, 99,100,101,102,103,104,105,106,107 ];
+                */
+                
+                // 5-note scales
+                var majorPentatonic     = [0, 2, 4, 7, 9];
+                var minorPentatonic     = [0, 3, 5, 7, 10];
+                var suspendedPentatonic = [0, 2, 5, 7, 10];
+                var lydianPentatonic    = [0, 2, 4, 6, 9];
+
+                // 6-note scales
+                var majorHexatonic      = [0, 2, 4, 7, 9, 11];
+                var minorHexatonic      = [0, 2, 3, 5, 7, 10];
+                var suspendedHexatonic  = [0, 2, 5, 7, 9, 10];
+                var dominantHexatonic   = [0, 2, 4, 7, 9, 10];
+                var lydianHexatonic     = [0, 2, 4, 6, 9, 11];
+                
+                // classical 7-note scales
+                var majorHeptatonic     = [0, 2, 4, 5, 7, 9, 11];
+                var minorHeptatonic     = [0, 2, 3, 5, 7, 8, 10];
+                var lydianHeptatonic    = [0, 2, 4, 6, 7, 9, 11];
+                /*
+                var dorianMode          = [0, 2, 3, 5, 7, 9, 10];
+                var mixolydianMode      = [0, 2, 4, 5, 7, 9, 10];
+                */
+ 
+                var keyTransposition = 0; // range: -6 to 6 (0 is in key of C, -6 is F# below, 6 is F# above)
+                var numberOfOctaves = 3; // range: 1 to 4
+                var baseOctave = MIDInoteOctaveOffsets[0]; // conservative range: MIDInoteOctaveOffsets[0] to MIDInoteOctaveOffsets[2]
+                
+                // parameters that can be edited
+                var voiceEntranceSpread = 2.0; // range: 0.0 (all enter together) to 4.0 (very random, sporadic entrances)
+                var loopDuration = 30; // how many seconds between each new harmony
+                //
+
+                var currentOctave = baseOctave;
+                var currentMIDInote = 0;
+                var instrumentFrequency = 0;
+                var noteStartTime = 0;
+                var now = 0;
+                var tonalPalette = [];
+                var randChoice = 0;
+                var oldHarmonyChoice = -1;
+                var oldNumOctavesChoice = -1;
+                var scaleChoice;
+                var harmonyChoiceText = "";
+                var firstTime = true;
+
+        
+                function updateTextInfo() {
+
+                        document.getElementById("textInfo").innerHTML = 
+                        "Deep Space Pad" + "<br>" +
+                        "(a generative harmony composer)" + "<br>" +
+                        "<br>" +
+                        "Current harmony: " + harmonyChoiceText + "<br>" +
+                        "Transposition half-steps from C: " + keyTransposition + "<br>" +
+                        "Number of simultaneous octaves: " + numberOfOctaves;
+
+                }
+
+                function initWebAudio() {
+
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                        var sampleQuality = 1.0; //conservative range: 0.2 to 1.0, < 1.0 is lower quality, 1.0 is high quality
+                        var channels = 2; // 1 = Mono or 2 = Stereo
+                        var numSeconds = 4.0; // conservative range: 2.0 to 4.0 
+                        var frameCount = sampleQuality * audioContext.sampleRate * numSeconds;
+
+                        myArrayBuffer = audioContext.createBuffer(channels, frameCount, sampleQuality * audioContext.sampleRate);
+
+                        /*
+                        // White Noise
+
+                        // Fill the buffer with values between -1.0 and 1.0
+                        for (var channel = 0; channel < channels; channel++) {
+                                var nowBuffering = myArrayBuffer.getChannelData(channel);
+                                for (var i = 0; i < frameCount; i++) {
+                                        nowBuffering[i] = Math.random() * 2 - 1;
+                                        // below is a reference for creating a pure Sine wave oscillating at 440.0 Hz (A440)
+                                        //nowBuffering[i] = Math.sin( 440.0 * Math.PI * 2.0 * numSeconds * (i / frameCount) );
+                                }
+                        }
+                        */
+
+                        // Brown Noise
+                        // borrowed from https://github.com/zacharydenton/noise.js
+
+                        // Fill the buffer with values between -1.0 and 1.0
+                        for (var channel = 0; channel < channels; channel++) {
+                                var lastOut = 0.0;
+                                var white = 0.0;
+                                var nowBuffering = myArrayBuffer.getChannelData(channel);
+                                for (var i = 0; i < frameCount; i++) {
+                                        white = Math.random() * 2 - 1;
+					nowBuffering[i] = (lastOut + (0.02 * white)) / 1.02;
+					lastOut = nowBuffering[i];
+					nowBuffering[i] *= 3.5; // (roughly) compensate for gain
+                                }
+                        }
+
+                        loopFunction();
+                        setInterval(loopFunction, loopDuration * 1000);
+                               
+                } // end function initWebAudio()
+
+
+
+                function loopFunction() {
+
+                        if ( !firstTime )
+                        {
+                                for (var i = 0; i < tonalPalette.length; i++) {
+                                        sources[i].stop(audioContext.currentTime);
+                                }
+                        }
+                        
+                        firstTime = false;
+
+                        chooseNewHarmony();
+                        
+                        updateTextInfo();
+
+                        buildAndPlayInstrument();
+
+                }
+
+                function chooseNewHarmony() {
+
+                        randChoice = Math.floor(Math.random() * 12);
+
+                        if (randChoice == oldHarmonyChoice) {
+                                randChoice += 1;
+                                if (randChoice > 11) {
+                                        randChoice = 0;
+                                }           
+                        }
+                        oldHarmonyChoice = randChoice;
+
+                        //randChoice = 4; // debug 1 harmony at a time
+                        
+                        if (randChoice == 0) {
+                                scaleChoice = majorPentatonic;
+                                harmonyChoiceText = "Major Pentatonic";
+                        }
+                        else if (randChoice == 1) {
+                                scaleChoice = minorPentatonic;
+                                harmonyChoiceText = "Minor Pentatonic";
+                        }
+                        else if (randChoice == 2) {
+                                scaleChoice = suspendedPentatonic;
+                                harmonyChoiceText = "Suspended Pentatonic";
+                        }
+                        else if (randChoice == 3) {
+                                scaleChoice = lydianPentatonic;
+                                harmonyChoiceText = "Lydian Pentatonic";
+                        }
+                        else if (randChoice == 4) {
+                                scaleChoice = majorHexatonic;
+                                harmonyChoiceText = "Major Hexatonic";
+                        }
+                        else if (randChoice == 5) {
+                                scaleChoice = minorHexatonic;
+                                harmonyChoiceText = "Minor Hexatonic";
+                        }
+                        else if (randChoice == 6) {
+                                scaleChoice = suspendedHexatonic;
+                                harmonyChoiceText = "Suspended Hexatonic";
+                        }
+                        else if (randChoice == 7) {
+                                scaleChoice = dominantHexatonic;
+                                harmonyChoiceText = "Dominant Hexatonic";
+                        }
+                        else if (randChoice == 8) {
+                                scaleChoice = lydianHexatonic;
+                                harmonyChoiceText = "Lydian Hexatonic";
+                        }
+                        else if (randChoice == 9) {
+                                scaleChoice = majorHeptatonic;
+                                harmonyChoiceText = "Major Heptatonic";
+                        }
+                        else if (randChoice == 10) {
+                                scaleChoice = minorHeptatonic;
+                                harmonyChoiceText = "Minor Heptatonic";
+                        }
+                        else if (randChoice == 11) {
+                                scaleChoice = lydianHeptatonic;
+                                harmonyChoiceText = "Lydian Heptatonic";
+                        }
+
+                        createPalette(scaleChoice);
+
+                } // end function chooseNewHarmony()
+
+
+                function createPalette( scalePattern ) {
+
+                        tonalPalette.length = 0; // clear tonalPalette array
+
+                        keyTransposition = Math.floor(Math.random() * 12) - 5;
+                
+                        numberOfOctaves = Math.floor(Math.random() * 4) + 2;
+
+                        if (numberOfOctaves == oldNumOctavesChoice) {
+                                numberOfOctaves -= 1;
+                                if (numberOfOctaves < 2) {
+                                        numberOfOctaves = 5;
+                                }           
+                        }
+                        oldNumOctavesChoice = numberOfOctaves;
+
+                        // create the tonal 'palette': a set of notes(colors) to choose from 
+                        currentOctave = baseOctave; // reset currentOctave
+                        for (var i = 0, j = 0; i < (scalePattern.length * numberOfOctaves); i++, j++) {
+
+                                if (j == scalePattern.length) {
+                                        currentOctave += 12;
+                                        j = 0;
+                                }
+                                currentMIDInote = currentOctave + keyTransposition + scalePattern[j];
+                                
+                                instrumentFrequency = 440.0 * Math.pow( 2, (currentMIDInote - 69) / 12 );
+        
+                                tonalPalette.push(instrumentFrequency);
+                        }
+
+                } // end function createPalette( scalePattern )
+
+                
+
+                function buildAndPlayInstrument() {
+
+                        // build and play the instrument using note choices from the tonalPalette
+                        currentOctave = baseOctave; // reset currentOctave
+                        for (var i = 0; i < tonalPalette.length; i++) {
+
+                                instrumentFrequency = tonalPalette[i];
+                                noteStartTime = audioContext.currentTime + ( Math.random() * voiceEntranceSpread );
+                                if (voiceEntranceSpread > (loopDuration * 0.25)) 
+                                        noteStartTime = audioContext.currentTime;
+                                gainNodes[i] = audioContext.createGain();
+                                gainNodes[i].gain.setValueAtTime(0.01, noteStartTime);
+                                gainNodes[i].gain.exponentialRampToValueAtTime(1, noteStartTime + (loopDuration * 0.25));
+                                gainNodes[i].gain.setValueAtTime(1, noteStartTime + (loopDuration * 0.6));
+                                gainNodes[i].gain.exponentialRampToValueAtTime(0.004, audioContext.currentTime + Math.random() + loopDuration);
+                                gainNodes[i].connect(audioContext.destination);
+
+                                bandPassFilters[i] = audioContext.createBiquadFilter();
+                                bandPassFilters[i].type = "bandpass";
+                                bandPassFilters[i].frequency.setValueAtTime(instrumentFrequency, audioContext.currentTime);
+                                bandPassFilters[i].Q.setValueAtTime(200, audioContext.currentTime);
+                                bandPassFilters[i].connect(gainNodes[i]);
+
+                                sources[i] = audioContext.createBufferSource();
+                                sources[i].buffer = myArrayBuffer;
+                                sources[i].loop = true;
+                                sources[i].connect(bandPassFilters[i]);
+                                sources[i].start(noteStartTime);
+                                
+                        }
+
+                } // end function buildAndPlayInstrument()
+
+                
+                window.onload = initWebAudio;
+
+        </script>
+
+</body>
+
+</html>
