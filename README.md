@@ -25,4 +25,4 @@ March 29, 2018: Initial Commit
 * I want to explore melodic automatic composition rather than just harmonies.  This is much more difficult to make convincing though.  
 * I might start with a Wind Chime type machine that randomly plays pleasing tones, then I'll try to refine this process to have more organization in the composition.
 * Develop different rhythm generation algorithms and combine this with the harmony and melody making process.
-* Eventually, way down the line, have the entire film score-type music composing process automated. Realistically, I don't know how far I can take this artistically, but it's fun to think about and explore! :-)
+* Eventually, way down the line, have the entire film score-type music composing process automated. Being realistic, I don't know how far I can take this artistically, but it's fun to think about and explore! :-)
