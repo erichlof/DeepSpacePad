@@ -193,6 +193,7 @@
                         {
                                 for (var i = 0; i < tonalPalette.length; i++) {
                                         sources[i].stop(audioContext.currentTime);
+                                        sources[i].disconnect(bandPassFilters[i]);
                                 }
                         }
                         
@@ -207,6 +208,8 @@
                 }
 
                 function chooseNewHarmony() {
+
+                        scaleChoice = null;
 
                         randChoice = Math.floor(Math.random() * 12);
 
@@ -310,6 +313,10 @@
                 
 
                 function buildAndPlayInstrument() {
+
+                        gainNodes.length = 0;
+                        bandPassFilters.length = 0;
+                        sources.length = 0;
 
                         // build and play the instrument using note choices from the tonalPalette
                         currentOctave = baseOctave; // reset currentOctave
