@@ -88,10 +88,12 @@
 
 
         <script>
+                var gainNodes = [];
+                var bandPassFilters = [];
                 var timerWorker = null; // The Web Worker used to fire timer messages
                 var workerData;
                 var audioContext;
-                var audioContextTime = 0;
+                var audioContextTimeSinceBeginning = 0;
                 var lookAhead = 1.0; // how many seconds in the future to schedule audio
                 var myArrayBuffer;
                 var MIDInoteOctaveOffsets = [48, 60, 72, 84, 96]; // start at 48, 36 is too low for air noise to be heard
@@ -258,32 +260,31 @@
 
                 function buildAndPlayInstrument() {
 
-                        var gainNodes = [];
-                        var bandPassFilters = [];
+                        
                         var sources = [];
 
-                        //audioContextTime = audioContext.currentTime + lookAhead;
+                        //audioContextTimeSinceBeginning = audioContext.currentTime + lookAhead;
 
                         // build and play the instrument using note choices from the tonalPalette
                         currentOctave = baseOctave; // reset currentOctave
                         for (var i = 0; i < tonalPalette.length; i++) {
 
                                 instrumentFrequency = tonalPalette[i];
-                                noteStartTime = audioContextTime + (Math.random() * voiceEntranceSpread);
+                                noteStartTime = audioContextTimeSinceBeginning + (Math.random() * voiceEntranceSpread);
                                 if (voiceEntranceSpread > (loopDuration * 0.25))
-                                        noteStartTime = audioContextTime;
-                                gainNodes[i] = audioContext.createGain();
-                                gainNodes[i].gain.setValueAtTime(0.01, noteStartTime);
+                                        noteStartTime = audioContextTimeSinceBeginning;
+                                //gainNodes[i] = audioContext.createGain();
+                                gainNodes[i].gain.setValueAtTime(0.01, audioContext.currentTime); // set now
                                 gainNodes[i].gain.exponentialRampToValueAtTime(1, noteStartTime + (loopDuration * 0.25));
                                 gainNodes[i].gain.setValueAtTime(1, noteStartTime + (loopDuration * 0.6));
-                                gainNodes[i].gain.exponentialRampToValueAtTime(0.004, audioContextTime + Math.random() +
+                                gainNodes[i].gain.exponentialRampToValueAtTime(0.004, audioContextTimeSinceBeginning + Math.random() +
                                         loopDuration);
                                 gainNodes[i].connect(audioContext.destination);
 
-                                bandPassFilters[i] = audioContext.createBiquadFilter();
-                                bandPassFilters[i].type = "bandpass";
-                                bandPassFilters[i].frequency.setValueAtTime(instrumentFrequency, audioContext.currentTime);
-                                bandPassFilters[i].Q.setValueAtTime(200, audioContext.currentTime);
+                                //bandPassFilters[i] = audioContext.createBiquadFilter();
+                                //bandPassFilters[i].type = "bandpass";
+                                bandPassFilters[i].frequency.setValueAtTime(instrumentFrequency, audioContext.currentTime); // set now
+                                bandPassFilters[i].Q.setValueAtTime(200, audioContext.currentTime); // set now
                                 bandPassFilters[i].connect(gainNodes[i]);
 
                                 sources[i] = audioContext.createBufferSource();
@@ -291,10 +292,10 @@
                                 sources[i].loop = true;
                                 sources[i].connect(bandPassFilters[i]);
                                 sources[i].start(noteStartTime);
-                                sources[i].stop(audioContextTime + loopDuration - (noteStartTime - audioContextTime));
+                                sources[i].stop(audioContext.currentTime + (loopDuration - 0.5)); // stop a little early before next harmony
                         }
 
-                        audioContextTime += loopDuration;
+                        audioContextTimeSinceBeginning += loopDuration;
 
                 } // end function buildAndPlayInstrument()
 
@@ -310,7 +311,7 @@
                 } // end function scheduler()
 
                 function startPlaying() {
-                        audioContextTime = audioContext.currentTime + lookAhead;
+                        audioContextTimeSinceBeginning = audioContext.currentTime + lookAhead;
                         timerWorker.postMessage("start");
                 }
 
@@ -318,8 +319,8 @@
                         timerWorker.postMessage("stop");
                 }
 
-                function initWebAudio() {
 
+                function initWebAudio() {
 
                         audioContext = new(window.AudioContext || window.webkitAudioContext)();
 
@@ -358,6 +359,12 @@
                                         lastOut = nowBuffering[i];
                                         nowBuffering[i] *= 3.5; // (roughly) compensate for gain
                                 }
+                        }
+
+                        for (var i = 0; i < 35; i++) {
+                                gainNodes[i] = audioContext.createGain();
+                                bandPassFilters[i] = audioContext.createBiquadFilter();
+                                bandPassFilters[i].type = "bandpass";
                         }
 
                         workerData = new Blob([document.getElementById('myWorker').textContent], {
