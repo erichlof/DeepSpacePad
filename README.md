@@ -18,6 +18,8 @@ I was influenced by the haunting space music in 2001: A Space Odyssey, Interstel
 
 <h3>Updates</h3>
 
+April 16, 2018: Finally squashed a Web Audio stuttering bug (happening mainly on mobile with less powered CPU).  Before this fix I was creating a new Gain node and a new BiQuadFilter node for each of the 35 voices for each new harmony every 30 seconds.  I don't think the garbage collector was taking care of the old ones that I discarded.  Also, I read and re-read Chris Wilson's great article https://www.html5rocks.com/en/tutorials/audio/scheduling/ and implemented the just-in-time scheduler like he has for his metronome app.  I also followed his later revision on GitHub to go one step further and put javascript's setInterval looping timer on its own background thread using a Web Worker.  Now I am confident that the timing will be smooth, even if the user changes orientation on the mobile device, or resizes or minimizes the browser window on desktop.  Even with all this going on, the timing stays rock solid - no more audio stuttering or hiccups! Yay :)
+
 March 29, 2018: Initial Commit
 
 <h3>Future Plans</h3>
