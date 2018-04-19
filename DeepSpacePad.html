@@ -52,6 +52,17 @@
                         top: 1%;
                         z-index: 1;
                 }
+
+                #clickAnywhere {
+                        font-family: 'Courier';
+                        font-weight: bold;
+                        font-size: 20px;
+                        color: white;
+                        position: relative;
+                        text-align: center;
+                        top: 10%;
+                        z-index: 1;
+                }
         </style>
 </head>
 
@@ -60,6 +71,8 @@
         <div id="spaceBackground"> </div>
 
         <div id="textInfo"> </div>
+
+        <div id="clickAnywhere"> </div>
 
 
         <script id="myWorker">
@@ -88,6 +101,20 @@
 
 
         <script>
+
+                document.getElementById("clickAnywhere").innerHTML = "Click Anywhere to Begin..";
+
+                function resumeAudioOnInitialPageVisit() {
+                        audioContext.resume();
+                        startPlaying();
+                        //console.log("audio context resumed");
+                        var clickAnywhere = document.getElementById("clickAnywhere");
+                        clickAnywhere.style.display = "none";
+                        document.body.removeChild(clickAnywhere);
+                        window.removeEventListener("click", resumeAudioOnInitialPageVisit);
+                }
+                window.addEventListener("click", resumeAudioOnInitialPageVisit);
+                
                 var gainNodes = [];
                 var bandPassFilters = [];
                 var timerWorker = null; // The Web Worker used to fire timer messages
@@ -260,7 +287,7 @@
 
                 function buildAndPlayInstrument() {
 
-                        
+
                         var sources = [];
 
                         //audioContextTimeSinceBeginning = audioContext.currentTime + lookAhead;
@@ -273,16 +300,15 @@
                                 noteStartTime = audioContextTimeSinceBeginning + (Math.random() * voiceEntranceSpread);
                                 if (voiceEntranceSpread > (loopDuration * 0.25))
                                         noteStartTime = audioContextTimeSinceBeginning;
-                                //gainNodes[i] = audioContext.createGain();
+
                                 gainNodes[i].gain.setValueAtTime(0.01, audioContext.currentTime); // set now
                                 gainNodes[i].gain.exponentialRampToValueAtTime(1, noteStartTime + (loopDuration * 0.25));
                                 gainNodes[i].gain.setValueAtTime(1, noteStartTime + (loopDuration * 0.6));
-                                gainNodes[i].gain.exponentialRampToValueAtTime(0.004, audioContextTimeSinceBeginning + Math.random() +
+                                gainNodes[i].gain.exponentialRampToValueAtTime(0.004, audioContextTimeSinceBeginning +
+                                        Math.random() +
                                         loopDuration);
                                 gainNodes[i].connect(audioContext.destination);
 
-                                //bandPassFilters[i] = audioContext.createBiquadFilter();
-                                //bandPassFilters[i].type = "bandpass";
                                 bandPassFilters[i].frequency.setValueAtTime(instrumentFrequency, audioContext.currentTime); // set now
                                 bandPassFilters[i].Q.setValueAtTime(200, audioContext.currentTime); // set now
                                 bandPassFilters[i].connect(gainNodes[i]);
@@ -390,12 +416,9 @@
                                 "interval": loopDuration * 1000 // must be given in milliseconds
                         });
 
-                        startPlaying();
-
                 } // end function initWebAudio()
 
                 window.onload = initWebAudio;
-
         </script>
 
 </body>
